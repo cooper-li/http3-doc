@@ -201,7 +201,155 @@ Connectivity problems (e.g., blocking UDP) can result in a failure to establish 
 
 Servers **MAY** serve HTTP/3 on any UDP port; an alternative service advertisement always includes an explicit port, and URIs contain either an explicit port or a default port associated with the scheme.
 
-服务器可以在任何UDP端口上提供HTTP/3；备选服务公告始终包含显式端口，URI包含与方案关联的显式端口或默认端口。
+服务器可以在任何 UDP 端口上提供 HTTP/3；一个可选服务始终包含显式端口，并且 URI 包含与方案关联的显式端口或默认端口。
+
+#### 3.1.1 HTTP 可选服务
+
+An HTTP origin can advertise the availability of an equivalent HTTP/3 endpoint via the Alt-Svc HTTP response header field or the HTTP/2 ALTSVC frame ([[ALTSVC](https://www.rfc-editor.org/rfc/rfc9114.html#ALTSVC)]) using the "h3" ALPN token.
+
+For example, an origin could indicate in an HTTP response that HTTP/3 was available on UDP port 50781 at the same hostname by including the following header field:
+
+HTTP源可以在HTTP响应头`Alt-Svc`字段或者HTTP/2`ALTSVC`帧([[ALTSVC](https://www.rfc-editor.org/rfc/rfc9114.html#ALTSVC)]) 中, 使用`h3` ALPN令牌通告HTTP/3端点的可用性。
+
+例如, 服务源可以在 HTTP 响应中表示 HTTP/3 在同一主机的 UDP 端口 50781 上可用, 方法是包含以下响应头字段: 
+
+```http-message
+Alt-Svc: h3=":50781"
+```
+
+On receipt of an Alt-Svc record indicating HTTP/3 support, a client **MAY** attempt to establish a QUIC connection to the indicated host and port; if this connection is successful, the client can send HTTP requests using the mapping described in this document.
+
+在收到指示 HTTP/3 支持的 Alt-Svc 记录后，客户端可能会尝试建立与指示的主机和端口的 QUIC 连接； 如果此连接成功，客户端可以使用本文档中描述的映射发送 HTTP 请求。
+
+#### 3.1.2 其他方案
+
+Although HTTP is independent of the transport protocol, the "http" scheme associates authority with the ability to receive TCP connections on the indicated port of whatever host is identified within the authority component. Because HTTP/3 does not use TCP, HTTP/3 cannot be used for direct access to the authoritative server for a resource identified by an "http" URI. However, protocol extensions such as [[ALTSVC](https://www.rfc-editor.org/rfc/rfc9114.html#ALTSVC)] permit the authoritative server to identify other services that are also authoritative and that might be reachable over HTTP/3.
+
+尽管HTTP独立于传输协议，但“http”方案将授权与在授权组件中标识的任何主机的指示端口上接收TCP连接的能力相关联。因为 HTTP/3 不使用 TCP，所以 HTTP/3 不能用于直接访问由“http”URI 资源标识的权威服务器。 但是，诸如 [[ALTSVC](https://www.rfc-editor.org/rfc/rfc9114.html#ALTSVC)] 之类的协议扩展允许权威服务器识别其他同样具有权威性并且可以通过 HTTP/3 访问的服务。
+
+Prior to making requests for an origin whose scheme is not "https", the client **MUST** ensure the server is willing to serve that scheme. For origins whose scheme is "http", an experimental method to accomplish this is described in [[RFC8164](https://www.rfc-editor.org/rfc/rfc9114.html#RFC8164)]. Other mechanisms might be defined for various schemes in the future.
+
+在向方案不是“https”的源发出请求之前，客户端必须确保服务器能够为该方案提供服务。 对于方案为“http”的源，在 [[RFC8164](https://www.rfc-editor.org/rfc/rfc9114.html#RFC8164)] 中描述了实现此目的的实验方法。 将来可能会为各种方案定义其他机制。
+
+### 3.2 连接建立
+
+HTTP/3 relies on QUIC version 1 as the underlying transport. The use of other QUIC transport versions with HTTP/3 **MAY** be defined by future specifications.
+
+QUIC version 1 uses TLS version 1.3 or greater as its handshake protocol. HTTP/3 clients **MUST** support a mechanism to indicate the target host to the server during the TLS handshake. If the server is identified by a domain name ([[DNS-TERMS](https://www.rfc-editor.org/rfc/rfc9114.html#DNS-TERMS)]), clients **MUST** send the Server Name Indication (SNI; [[RFC6066](https://www.rfc-editor.org/rfc/rfc9114.html#RFC6066)]) TLS extension unless an alternative mechanism to indicate the target host is used.
+
+QUIC connections are established as described in [[QUIC-TRANSPORT](https://www.rfc-editor.org/rfc/rfc9114.html#QUIC-TRANSPORT)]. During connection establishment, HTTP/3 support is indicated by selecting the ALPN token "h3" in the TLS handshake. Support for other application-layer protocols **MAY** be offered in the same handshake.
+
+While connection-level options pertaining to the core QUIC protocol are set in the initial crypto handshake, settings specific to HTTP/3 are conveyed in the [SETTINGS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-settings) frame. After the QUIC connection is established, a [SETTINGS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-settings) frame **MUST** be sent by each endpoint as the initial frame of their respective HTTP [control stream](https://www.rfc-editor.org/rfc/rfc9114.html#control-streams).
+
+HTTP/3 依赖于 QUIC 版本 1 作为底层传输。 未来规划 HTTP/3 可能会使用其他 QUIC 传输版本。 HTTP/3 客户端必须支持在 TLS 握手期间向服务器指示目标主机的机制。如果服务器由域名 ([[DNS-TERMS](https://www.rfc-editor.org/rfc/rfc9114.html#DNS-TERMS)]) 标识，则客户端必须发送服务器名称指示 (SNI;  [[RFC6066](https://www.rfc-editor.org/rfc/rfc9114.html#RFC6066)]) TLS 扩展，除非使用了指示目标主机的替代机制。
+
+QUIC 连接按照 [[QUIC-TRANSPORT](https://www.rfc-editor.org/rfc/rfc9114.html#QUIC-TRANSPORT)] 中的描述建立。在连接建立期间，通过在 TLS 握手中选择 ALPN 令牌“h3”来指示 HTTP/3 支持。可以在同一握手中提供对其他应用层协议的支持。
+
+虽然与核心 QUIC 协议有关的连接级别选项是在初始加密握手中设置的，但 HTTP/3 特定设置在 SETTINGS 帧中传达。 QUIC 连接建立后，每个端点必须发送一个  [SETTINGS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-settings)  帧（第 7.2.4 节）作为各自 HTTP 控制流的初始帧。
+
+### 3.3 连接重用
+
+HTTP/3 connections are persistent across multiple requests. For best performance, it is expected that clients will not close connections until it is determined that no further communication with a server is necessary (for example, when a user navigates away from a particular web page) or until the server closes the connection.
+
+HTTP/3连接在多个请求之间是持久的。为了获得最佳性能，客户端将不会关闭连接，直到确定不需要与服务器进行进一步通信（例如，当用户导航离开特定网页时）或直到服务器关闭连接。
+
+Once a connection to a server endpoint exists, this connection **MAY** be reused for requests with multiple different URI authority components. To use an existing connection for a new origin, clients **MUST** validate the certificate presented by the server for the new origin server using the process described in [Section 4.3.4](https://www.rfc-editor.org/rfc/rfc9110#section-4.3.4) of [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]. This implies that clients will need to retain the server certificate and any additional information needed to verify that certificate; clients that do not do so will be unable to reuse the connection for additional origins.
+
+一旦存在与服务器端点的连接，则可以重复使用此连接，以用于多个不同URI的请求。要使用新来源的现有连接，客户端必须使用 [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]第[Section 4.3.4](https://www.rfc-editor.org/rfc/rfc9110#section-4.3.4)节中描述的过程验证服务器为新Origin服务器提供的证书。这意味着客户端将需要保留服务器证书和验证该证书所需的任何其他信息；不这样做的客户端将无法在其他新的源中重复使用此连接。
+
+If the certificate is not acceptable with regard to the new origin for any reason, the connection **MUST NOT** be reused and a new connection **SHOULD** be established for the new origin. If the reason the certificate cannot be verified might apply to other origins already associated with the connection, the client **SHOULD** revalidate the server certificate for those origins. For instance, if validation of a certificate fails because the certificate has expired or been revoked, this might be used to invalidate all other origins for which that certificate was used to establish authority.
+
+如果对新来源的证书不可接受, 不管出于任何原因, 都不得重复使用该连接, 并且应为新来源建立新的连接。如果无法验证证书的情形可能也存在与该连接关联的其他源, 则客户端应该重新验证这些源的服务器证书。例如，如果证书的验证因证书已过期或已撤销而失败，则使用该证书建立权限认证的所有其他起源无效。
+
+Clients **SHOULD NOT** open more than one HTTP/3 connection to a given IP address and UDP port, where the IP address and port might be derived from a URI, a selected alternative service ([[ALTSVC](https://www.rfc-editor.org/rfc/rfc9114.html#ALTSVC)]), a configured proxy, or name resolution of any of these. A client **MAY** open multiple HTTP/3 connections to the same IP address and UDP port using different transport or TLS configurations but **SHOULD** avoid creating multiple connections with the same configuration.
+
+客户端不应打开一个以上的http/3连接到给定的IP地址和UDP端口，其中IP地址和端口可能是派生于URI，已被选择的替代服务（[[ALTSVC](https://www.rfc-editor.org/rfc/rfc9114.html#ALTSVC)]），已配置的代理或其中任何一个的名称解析。客户端可以使用不同的传输或TLS配置打开多个HTTP/3连接到相同的IP地址和UDP端口，但应避免使用相同的配置创建多个连接。
+
+Servers are encouraged to maintain open HTTP/3 connections for as long as possible but are permitted to terminate idle connections if necessary. When either endpoint chooses to close the HTTP/3 connection, the terminating endpoint **SHOULD** first send a [GOAWAY](https://www.rfc-editor.org/rfc/rfc9114.html#frame-goaway) frame ([Section 5.2](https://www.rfc-editor.org/rfc/rfc9114.html#connection-shutdown)) so that both endpoints can reliably determine whether previously sent frames have been processed and gracefully complete or terminate any necessary remaining tasks.
+
+鼓励服务器尽可能长时间保持开放的HTTP/3连接，但在必要时允许终止空闲连接。当任一端点选择关闭HTTP/3连接时，终端端点应首先发送  [GOAWAY](https://www.rfc-editor.org/rfc/rfc9114.html#frame-goaway) 帧 ([Section 5.2](https://www.rfc-editor.org/rfc/rfc9114.html#connection-shutdown))，以便两个端点都可以确定是否已经可靠的处理过并优雅地完剩余任务。 
+
+A server that does not wish clients to reuse HTTP/3 connections for a particular origin can indicate that it is not authoritative for a request by sending a 421 (Misdirected Request) status code in response to the request; see [Section 7.4](https://www.rfc-editor.org/rfc/rfc9110#section-7.4) of [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)].
+
+不希望客户端重新使用特定来源的HTTP/3连接，特定来源指: 可以通过发送421(错误定向的请求)状态代码来响应请求，以表明它对请求没有权限认证；请参阅[[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]的第[7.4](https://www.rfc-editor.org/rfc/rfc9110#section-7.4)节。
+
+## 4. HTTP/3中的HTTP语义表示
+
+#### 4.1. HTTP消息帧
+
+A client sends an HTTP request on a [request stream](https://www.rfc-editor.org/rfc/rfc9114.html#request-streams), which is a client-initiated bidirectional QUIC stream; see [Section 6.1](https://www.rfc-editor.org/rfc/rfc9114.html#request-streams). A client **MUST** send only a single request on a given stream. A server sends zero or more interim HTTP responses on the same stream as the request, followed by a single final HTTP response, as detailed below. See [Section 15](https://www.rfc-editor.org/rfc/rfc9110#section-15) of [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)] for a description of interim and final HTTP responses.
+
+Pushed responses are sent on a server-initiated unidirectional QUIC stream; see [Section 6.2.2](https://www.rfc-editor.org/rfc/rfc9114.html#push-streams). A server sends zero or more interim HTTP responses, followed by a single final HTTP response, in the same manner as a standard response. Push is described in more detail in [Section 4.6](https://www.rfc-editor.org/rfc/rfc9114.html#server-push).
+
+On a given stream, receipt of multiple requests or receipt of an additional HTTP response following a final HTTP response **MUST** be treated as [malformed](https://www.rfc-editor.org/rfc/rfc9114.html#malformed).
+
+An HTTP message (request or response) consists of:
+
+1. the header section, including message control data, sent as a single [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) frame,
+2. optionally, the content, if present, sent as a series of [DATA](https://www.rfc-editor.org/rfc/rfc9114.html#frame-data) frames, and
+3. optionally, the trailer section, if present, sent as a single [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) frame.
+
+客户端在请求流上发送HTTP请求，该请求流是客户端发射的双向Quic流；请参阅第[Section 6.1](https://www.rfc-editor.org/rfc/rfc9114.html#request-streams)节。客户端必须仅在给定的流上发送一个请求。服务器在请求的同一流中发送零或更多的临时HTTP响应，随后是单个最终HTTP响应，详情参见 [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]的第 [15](https://www.rfc-editor.org/rfc/rfc9110#section-15)节，描述了有关中期和最终响应的描述。
+
+推送响应在服务器启动的在单向Quic流上被发送；请参阅第[6.2.2](https://www.rfc-editor.org/rfc/rfc9114.html#push-streams)节。服务器以相同的方式发送零或更多的临时HTTP标准响应，然后是单个最终HTTP响应。在第[Section 4.6](https://www.rfc-editor.org/rfc/rfc9114.html#server-push)节中更详细地描述了推动。
+
+给定的流中，在最终的HTTP响应之后接受多个或者额外的请求, 必须被视为格式错误。
+
+HTTP消息（请求或响应）包括：
+
+1.  header部分, 作为一个 [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) 帧被发送,  包括消息控制数据的报头部分
+
+2. 可选的内容, 如果存在, 作为一系列 [DATA](https://www.rfc-editor.org/rfc/rfc9114.html#frame-data) 帧发送
+
+3. 可选的预告部分, 如果存在, 作为单独的 [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) 帧发送
+
+Header and trailer sections are described in Sections [6.3](https://www.rfc-editor.org/rfc/rfc9110#section-6.3) and [6.5](https://www.rfc-editor.org/rfc/rfc9110#section-6.5) of [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]; the content is described in [Section 6.4](https://www.rfc-editor.org/rfc/rfc9110#section-6.4) of [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)].
+
+Receipt of an invalid sequence of frames **MUST** be treated as a [connection error](https://www.rfc-editor.org/rfc/rfc9114.html#errors) of type [H3_FRAME_UNEXPECTED](https://www.rfc-editor.org/rfc/rfc9114.html#H3_FRAME_UNEXPECTED). In particular, a [DATA](https://www.rfc-editor.org/rfc/rfc9114.html#frame-data) frame before any [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) frame, or a [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) or [DATA](https://www.rfc-editor.org/rfc/rfc9114.html#frame-data) frame after the trailing [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) frame, is considered invalid. Other frame types, especially unknown frame types, might be permitted subject to their own rules; see [Section 9](https://www.rfc-editor.org/rfc/rfc9114.html#extensions).
+
+A server **MAY** send one or more [PUSH_PROMISE](https://www.rfc-editor.org/rfc/rfc9114.html#frame-push-promise) frames before, after, or interleaved with the frames of a response message. These [PUSH_PROMISE](https://www.rfc-editor.org/rfc/rfc9114.html#frame-push-promise) frames are not part of the response; see [Section 4.6](https://www.rfc-editor.org/rfc/rfc9114.html#server-push) for more details. [PUSH_PROMISE](https://www.rfc-editor.org/rfc/rfc9114.html#frame-push-promise) frames are not permitted on [push streams](https://www.rfc-editor.org/rfc/rfc9114.html#push-streams); a pushed response that includes [PUSH_PROMISE](https://www.rfc-editor.org/rfc/rfc9114.html#frame-push-promise) frames **MUST** be treated as a [connection error](https://www.rfc-editor.org/rfc/rfc9114.html#errors) of type [H3_FRAME_UNEXPECTED](https://www.rfc-editor.org/rfc/rfc9114.html#H3_FRAME_UNEXPECTED).
+
+Frames of unknown types ([Section 9](https://www.rfc-editor.org/rfc/rfc9114.html#extensions)), including reserved frames ([Section 7.2.8](https://www.rfc-editor.org/rfc/rfc9114.html#frame-reserved)) **MAY** be sent on a request or [push stream](https://www.rfc-editor.org/rfc/rfc9114.html#push-streams) before, after, or interleaved with other frames described in this section.
+
+Header头和预告在[[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]的 [6.3](https://www.rfc-editor.org/rfc/rfc9110#section-6.3)和 [6.5](https://www.rfc-editor.org/rfc/rfc9110#section-6.5)节中进行了描述；内容部分在[[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]的第[Section 6.4](https://www.rfc-editor.org/rfc/rfc9110#section-6.4) 节中进行了描述。
+
+接受无效序列的帧必须被视为 H3_FRAME_UNEXPECT 类型的连接错误。特别是当 DATA 帧在任何 HEADER 帧之前, 或者 HEADER / DATA 帧出现在结尾的 HEADER 帧之后,被认为是无效的。其他帧类型，尤其是未知帧类型，可能会根据其自身的规则被认为是允许的；见[Section 9](https://www.rfc-editor.org/rfc/rfc9114.html#extensions)。
+
+服务器可以在响应消息帧之前、之后或与响应消息帧交叉发送一个或多个PUSH_PROMISE帧。这些PUSH_PROMISE帧不是响应的一部分；有关更多详细信息，请参阅第 [Section 4.6](https://www.rfc-editor.org/rfc/rfc9114.html#server-push)节。推送流上不允许PUSH_PROMISE帧；包含PUSH_PROMISE帧的推送响应必须被视为H3_FRAME_UNEXPECTED类型的连接错误。
+
+未知类型的帧（([Section 9](https://www.rfc-editor.org/rfc/rfc9114.html#extensions))），包括保留帧（[Section 7.2.8](https://www.rfc-editor.org/rfc/rfc9114.html#frame-reserved)），可以在请求或推送流之前，之后，或与本节中描述的其他帧交互发送。
+
+The [HEADERS](https://www.rfc-editor.org/rfc/rfc9114.html#frame-headers) and [PUSH_PROMISE](https://www.rfc-editor.org/rfc/rfc9114.html#frame-push-promise) frames might reference updates to the QPACK dynamic table. While these updates are not directly part of the message exchange, they must be received and processed before the message can be consumed. See [Section 4.2](https://www.rfc-editor.org/rfc/rfc9114.html#header-formatting) for more details.
+
+Transfer codings (see [Section 7](https://www.rfc-editor.org/rfc/rfc9112#section-7) of [[HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9112)]) are not defined for HTTP/3; the Transfer-Encoding header field **MUST NOT** be used.
+
+A response **MAY** consist of multiple messages when and only when one or more interim responses (1xx; see [Section 15.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.2) of [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]) precede a final response to the same request. Interim responses do not contain content or trailer sections.
+
+HEADER 和 PUSH_PROMISE 帧可以引用对 QPACK 动态表的更新。虽然这些更新不是消息交换的直接部分，但必须在消息被使用之前接收和处理它们。详见 [Section 4.2](https://www.rfc-editor.org/rfc/rfc9114.html#header-formatting)。
+
+传输编码（见[[HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9112)]第[Section 7](https://www.rfc-editor.org/rfc/rfc9112#section-7)节）在HTTP/3中未被定义；不得使用 Transfer-Encoding 头字段。
+
+同一个请求中, 当且仅当一个或多个临时响应(1xx；参见 [[HTTP](https://www.rfc-editor.org/rfc/rfc9114.html#RFC9110)]第 [Section 15.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.2) 节)先于最终响应时, 响应可能包含多个消息。临时响应不包含内容或预告部分。
+
+An HTTP request/response exchange fully consumes a client-initiated bidirectional QUIC stream. After sending a request, a client **MUST** close the stream for sending. Unless using the CONNECT method (see [Section 4.4](https://www.rfc-editor.org/rfc/rfc9114.html#connect)), clients **MUST NOT** make stream closure dependent on receiving a response to their request. After sending a final response, the server **MUST** close the stream for sending. At this point, the QUIC stream is fully closed.
+
+HTTP请求/响应交换完全承载于客户端发起的双向QUIC流。发送请求后，客户端必须关闭流以进行发送。除非使用 CONNECT 连接方法（参见第[Section 4.4](https://www.rfc-editor.org/rfc/rfc9114.html#connect)节），否则客户端不能依赖接受对于以其请求的响应使连接关闭。发送最终响应后，服务器必须关闭流才能继续发送。此时，QUIC流完全关闭。
+
+When a stream is closed, this indicates the end of the final HTTP message. Because some messages are large or unbounded, endpoints **SHOULD** begin processing partial HTTP messages once enough of the message has been received to make progress. If a client-initiated stream terminates without enough of the HTTP message to provide a complete response, the server **SHOULD** abort its response stream with the error code [H3_REQUEST_INCOMPLETE](https://www.rfc-editor.org/rfc/rfc9114.html#H3_REQUEST_INCOMPLETE).
+
+当流被关闭时，表示最后一条HTTP消息的结束。因为有些消息很大或是无限的，所以一旦接收到足够多的消息，端点就应该开始处理部分HTTP消息。如果客户端发起的流在没有足够的HTTP消息提供完整响应的情况下终止，则服务器应以错误代码H3_REQUEST_complete中止其响应流。
+
+A server can send a complete response prior to the client sending an entire request if the response does not depend on any portion of the request that has not been sent and received. When the server does not need to receive the remainder of the request, it **MAY** abort reading the [request stream](https://www.rfc-editor.org/rfc/rfc9114.html#request-streams), send a complete response, and cleanly close the sending part of the stream. The error code [H3_NO_ERROR](https://www.rfc-editor.org/rfc/rfc9114.html#H3_NO_ERROR) **SHOULD** be used when requesting that the client stop sending on the [request stream](https://www.rfc-editor.org/rfc/rfc9114.html#request-streams). Clients **MUST NOT** discard complete responses as a result of having their request terminated abruptly, though clients can always discard responses at their discretion for other reasons. If the server sends a partial or complete response but does not abort reading the request, clients **SHOULD** continue sending the content of the request and close the stream normally.
+
+如果响应不依赖于尚未发送和接收的请求的任何部分，则服务器可以在客户端发送整个请求之前发送完整响应。当服务器不需要接收请求的剩余部分时，它可以中止读取请求流，发送完整响应，并完全关闭流的发送部分。当客户端在 [请求流](https://www.rfc-editor.org/rfc/rfc9114.html#request-streams) 上停止发送时, 应该使用 [H3_NO_ERROR](https://www.rfc-editor.org/rfc/rfc9114.html#H3_NO_ERROR) 错误码。虽然客户端可以出于其他原因自行决定放弃响应, 但是客户端不得因其请求突然终止而放弃完整响应。如果服务器发送部分或完整响应，但没有中止读取请求，则客户端应继续发送请求内容并正常关闭流。
+
+
+
+
+
+
+
+
 
 
 
